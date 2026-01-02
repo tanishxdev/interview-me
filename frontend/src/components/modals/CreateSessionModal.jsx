@@ -1,97 +1,173 @@
-import { useState } from "react";
-import api from "../../services/api.js";
+/**
+ * CreateSessionModal Component
+ * Modal form for creating new interview sessions
+ */
 
-export default function CreateSessionModal({ isOpen, onClose }) {
-  const [problem, setProblem] = useState("");
-  const [difficulty, setDifficulty] = useState("medium");
-  const [loading, setLoading] = useState(false);
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Modal from "../common/Modal";
+import Button from "../common/Button";
+import useUIStore from "../../store/ui.store";
+import useSessionStore from "../../store/session.store";
+import { createSession } from "../../services/session.service";
+import { DIFFICULTY_LEVELS, ROUTES } from "../../utils/constants";
+
+const CreateSessionModal = () => {
+  const navigate = useNavigate();
+  const {
+    isCreateSessionModalOpen,
+    closeCreateSessionModal,
+    showNotification,
+  } = useUIStore();
+  const { addSession } = useSessionStore();
+
+  const [formData, setFormData] = useState({
+    problem: "",
+    difficulty: DIFFICULTY_LEVELS.MEDIUM,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  if (!isOpen) return null;
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setError(""); // Clear error on input change
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!problem.trim()) {
-      setError("Problem description is required");
+    setError("");
+
+    // Validation
+    if (formData.problem.trim().length < 10) {
+      setError("Problem description must be at least 10 characters");
       return;
     }
 
-    setLoading(true);
-    setError("");
-
     try {
-      const res = await api.post("/sessions", {
-        problem: problem.trim(),
-        difficulty,
+      setIsSubmitting(true);
+
+      // Create session via API
+      const newSession = await createSession(formData);
+
+      // Add to store
+      addSession(newSession);
+
+      // Show success notification
+      showNotification("success", "Session created successfully!");
+
+      // Close modal
+      closeCreateSessionModal();
+
+      // Navigate to session room
+      navigate(ROUTES.SESSION_ROOM.replace(":id", newSession._id));
+
+      // Reset form
+      setFormData({
+        problem: "",
+        difficulty: DIFFICULTY_LEVELS.MEDIUM,
       });
-      const sessionId = res.data.data.session._id;
-      onClose();
-      window.location.href = `/session/${sessionId}`;
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create session");
+      setError(err.message || "Failed to create session");
+      showNotification("error", err.message || "Failed to create session");
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      closeCreateSessionModal();
+      setFormData({
+        problem: "",
+        difficulty: DIFFICULTY_LEVELS.MEDIUM,
+      });
+      setError("");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          Create New Session
-        </h2>
+    <Modal
+      isOpen={isCreateSessionModalOpen}
+      onClose={handleClose}
+      title="Create Interview Session"
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Problem Input */}
+        <div>
+          <label
+            htmlFor="problem"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+          >
+            Problem Description
+          </label>
+          <textarea
+            id="problem"
+            name="problem"
+            rows={4}
+            value={formData.problem}
+            onChange={handleChange}
+            placeholder="e.g., Implement a function to reverse a linked list"
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-500"
+            required
+          />
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Minimum 10 characters
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Problem Statement
-            </label>
-            <textarea
-              value={problem}
-              onChange={(e) => setProblem(e.target.value)}
-              rows={4}
-              className="input resize-none"
-              placeholder="e.g., Implement a LRU Cache with O(1) operations"
-              required
-            />
+        {/* Difficulty Select */}
+        <div>
+          <label
+            htmlFor="difficulty"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+          >
+            Difficulty Level
+          </label>
+          <select
+            id="difficulty"
+            name="difficulty"
+            value={formData.difficulty}
+            onChange={handleChange}
+            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            required
+          >
+            <option value={DIFFICULTY_LEVELS.EASY}>Easy</option>
+            <option value={DIFFICULTY_LEVELS.MEDIUM}>Medium</option>
+            <option value={DIFFICULTY_LEVELS.HARD}>Hard</option>
+          </select>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="rounded-lg bg-red-50 p-3 dark:bg-red-900/20">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
+        )}
 
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Difficulty
-            </label>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-              className="input"
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-
-          {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
-
-          <div className="flex space-x-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
-              disabled={loading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 btn-primary disabled:opacity-70"
-            >
-              {loading ? "Creating..." : "Create Session"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Actions */}
+        <div className="flex justify-end space-x-3 pt-4">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+          >
+            Create Session
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
-}
+};
+
+export default CreateSessionModal;

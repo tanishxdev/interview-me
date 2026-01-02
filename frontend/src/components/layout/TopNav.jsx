@@ -1,99 +1,101 @@
+/**
+ * TopNav Component
+ * Navigation bar with authentication and theme toggle
+ */
+
+import { Link, useNavigate } from "react-router-dom";
 import { UserButton, useUser } from "@clerk/clerk-react";
-import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { MoonIcon, SunIcon } from "@heroicons/react/24/outline";
+import Button from "../common/Button";
+import useDarkMode from "../../hooks/useDarkMode";
+import { ROUTES } from "../../utils/constants";
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard" },
-  { name: "Sessions", href: "/sessions" },
-  { name: "Profile", href: "/profile" },
-];
-
-export default function TopNav() {
-  const { user } = useUser();
-  const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const TopNav = () => {
+  const navigate = useNavigate();
+  const { isSignedIn } = useUser();
+  const { isDarkMode, toggleTheme } = useDarkMode();
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-label="Top">
+    <nav className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/80 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center">
-            <Link to="/dashboard" className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">I</span>
-              </div>
-              <span className="text-xl font-semibold text-gray-900">
-                Interview.me
-              </span>
-            </Link>
-          </div>
-
-          <div className="hidden md:flex items-center space-x-8">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`text-sm font-medium transition-colors ${
-                  location.pathname === item.href
-                    ? "text-primary-600"
-                    : "text-gray-700 hover:text-primary-600"
-                }`}
-              >
-                {item.name}
-              </Link>
-            ))}
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:block">
-              <UserButton afterSignOutUrl="/" />
+          {/* Logo */}
+          <Link
+            to={isSignedIn ? ROUTES.DASHBOARD : ROUTES.HOME}
+            className="flex items-center space-x-2"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 dark:bg-blue-500">
+              <span className="text-lg font-bold text-white">IM</span>
             </div>
+            <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              Interview Me
+            </span>
+          </Link>
 
+          {/* Right Side Actions */}
+          <div className="flex items-center space-x-4">
+            {/* Theme Toggle */}
             <button
-              type="button"
-              className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onClick={toggleTheme}
+              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Toggle theme"
             >
-              {mobileMenuOpen ? (
-                <X className="h-6 w-6" />
+              {isDarkMode ? (
+                <SunIcon className="h-5 w-5" />
               ) : (
-                <Menu className="h-6 w-6" />
+                <MoonIcon className="h-5 w-5" />
               )}
             </button>
+
+            {/* Auth Actions */}
+            {isSignedIn ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(ROUTES.DASHBOARD)}
+                >
+                  Dashboard
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(ROUTES.SESSIONS)}
+                >
+                  Sessions
+                </Button>
+                <UserButton
+                  afterSignOutUrl={ROUTES.HOME}
+                  appearance={{
+                    elements: {
+                      avatarBox: "h-9 w-9",
+                    },
+                  }}
+                />
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(ROUTES.SIGN_IN)}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate(ROUTES.SIGN_UP)}
+                >
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
-
-        {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-200">
-            <div className="space-y-1 px-2 pt-2 pb-3">
-              {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`block px-3 py-2 rounded-md text-base font-medium ${
-                    location.pathname === item.href
-                      ? "bg-primary-50 text-primary-600"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-            <div className="border-t border-gray-200 px-4 py-4 flex items-center space-x-3">
-              <UserButton afterSignOutUrl="/" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {user?.fullName || "User"}
-                </p>
-                <p className="text-xs text-gray-500">Signed in</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
-    </header>
+      </div>
+    </nav>
   );
-}
+};
+
+export default TopNav;

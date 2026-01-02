@@ -1,26 +1,47 @@
-import { useState, useEffect } from "react";
-import api from "../services/api.js";
+/**
+ * useStreamToken Hook
+ * Fetches and manages Stream SDK token
+ */
 
-export default function useStreamToken() {
-  const [tokenData, setTokenData] = useState(null);
-  const [loading, setLoading] = useState(true);
+import { useUser } from "@clerk/clerk-react";
+import { useEffect, useState } from "react";
+import { getStreamToken } from "../services/chat.service";
+
+const useStreamToken = () => {
+  const { user, isLoaded } = useUser();
+  const [streamToken, setStreamToken] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchToken = async () => {
+      // Wait for Clerk user to be loaded
+      if (!isLoaded || !user) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const res = await api.get("/chat/token");
-        setTokenData(res.data.data);
+        setIsLoading(true);
+        setError(null);
+
+        const tokenData = await getStreamToken();
+        setStreamToken(tokenData);
       } catch (err) {
-        setError("Failed to load Stream token");
-        console.error(err);
+        setError(err.message || "Failed to fetch Stream token");
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
     fetchToken();
-  }, []);
+  }, [user, isLoaded]);
 
-  return { tokenData, loading, error };
-}
+  return {
+    streamToken,
+    isLoading,
+    error,
+  };
+};
+
+export default useStreamToken;

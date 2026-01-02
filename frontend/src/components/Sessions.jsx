@@ -3,22 +3,25 @@
  * Browse and filter all active interview sessions
  */
 
-import { FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { PlusIcon, FunnelIcon } from "@heroicons/react/24/outline";
 
+import TopNav from "../components/layout/TopNav";
+import Footer from "../components/layout/Footer";
 import Button from "../components/common/Button";
 import Loader from "../components/common/Loader";
-import Footer from "../components/layout/Footer";
-import TopNav from "../components/layout/TopNav.jsx";
 import CreateSessionModal from "../components/modals/CreateSessionModal";
+
+// ✅ this file EXISTS
 import SessionCard from "../components/Sessions.jsx";
 
-import { getActiveSessions, joinSession as joinSessionAPI } from "../services/session.service";
-import useSessionStore from "../store/session.store";
 import useUIStore from "../store/ui.store";
+import useSessionStore from "../store/session.store";
+import {
+  getActiveSessions,
+  joinSession as joinSessionAPI,
+} from "../services/session.service";
 import { DIFFICULTY_LEVELS } from "../utils/constants";
-
-
 
 
 const Sessions = () => {

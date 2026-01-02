@@ -1,29 +1,43 @@
+/**
+ * useDarkMode Hook
+ * Manages theme state and system preference detection
+ */
+
 import { useEffect } from "react";
+import useUIStore from "../store/ui.store";
 
-export function useDarkMode() {
+const useDarkMode = () => {
+  const { theme, isDarkMode, setTheme, toggleTheme } = useUIStore();
+
+  // Initialize theme on mount
   useEffect(() => {
-    const isDark =
-      localStorage.getItem("darkMode") === "true" ||
-      (!("darkMode" in localStorage) &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    // Apply initial theme
+    setTheme(theme);
 
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
+    // Listen for system theme changes when theme is 'system'
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
-  const toggle = () => {
-    const isCurrentlyDark = document.documentElement.classList.contains("dark");
-    if (isCurrentlyDark) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("darkMode", "false");
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("darkMode", "true");
-    }
+    const handleSystemThemeChange = (e) => {
+      if (theme === "system") {
+        const root = window.document.documentElement;
+        root.classList.toggle("dark", e.matches);
+        useUIStore.setState({ isDarkMode: e.matches });
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleSystemThemeChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleSystemThemeChange);
+    };
+  }, [theme, setTheme]);
+
+  return {
+    theme,
+    isDarkMode,
+    setTheme,
+    toggleTheme,
   };
+};
 
-  return { toggle };
-}
+export default useDarkMode;

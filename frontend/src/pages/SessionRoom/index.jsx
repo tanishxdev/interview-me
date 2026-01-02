@@ -1,153 +1,252 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+/**
+ * Session Room Page
+ * Live video interview session with Stream Video SDK
+ */
+
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useUser } from '@clerk/clerk-react';
 import {
   StreamVideo,
   StreamVideoClient,
   StreamCall,
-  SpeakerLayout,
   CallControls,
-  StreamTheme,
-} from "@stream-io/video-react-sdk";
-import {
-  Chat,
-  Channel,
-  ChannelHeader,
-  MessageList,
-  MessageInput,
-  Thread,
-  Window,
-} from "stream-chat-react";
-import { StreamChat } from "stream-chat";
-import "@stream-io/video-react-sdk/dist/css/styles.css";
-import "stream-chat-react/dist/css/v2/index.css";
+  SpeakerLayout,
+  CallParticipantsList,
+} from '@stream-io/video-react-sdk';
+import '@stream-io/video-react-sdk/dist/css/styles.css';
+import TopNav from '../../components/layout/TopNav';
+import Button from '../../components/common/Button';
+import Loader from '../../components/common/Loader';
+import useStreamToken from '../../hooks/useStreamToken';
+import useSessionStore from '../../store/session.store';
+import useUIStore from '../../store/ui.store';
+import { getSessionById, endSession } from '../../services/session.service';
+import { STREAM_API_KEY, ROUTES } from '../../utils/constants';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
-import useStreamToken from "../../hooks/useStreamToken.js";
-import api from "../../services/api.js";
-
-const API_KEY = import.meta.env.VITE_STREAM_API_KEY;
-
-export default function SessionRoom() {
-  const { id: callId } = useParams();
+const SessionRoom = () => {
+  const { id: sessionId } = useParams();
   const navigate = useNavigate();
+  const { user } = useUser();
+  const { streamToken, isLoading: isLoadingToken } = useStreamToken();
+  const { currentSession, setCurrentSession, clearCurrentSession } = useSessionStore();
+  const { showNotification } = useUIStore();
 
-  const { tokenData, loading: tokenLoading } = useStreamToken();
-  const [videoClient, setVideoClient] = useState(null);
-  const [chatClient, setChatClient] = useState(null);
+  const [client, setClient] = useState(null);
   const [call, setCall] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isEndingSession, setIsEndingSession] = useState(false);
 
+  // Fetch session data
   useEffect(() => {
-    if (!tokenData || !API_KEY) return;
-
-    // === VIDEO CLIENT ===
-    const vClient = new StreamVideoClient({
-      apiKey: API_KEY,
-      user: {
-        id: tokenData.userId,
-        name: tokenData.userName,
-        image: tokenData.userImage,
-      },
-      token: tokenData.token,
-    });
-
-    const vCall = vClient.call("default", callId);
-    vCall.join({ create: true }).catch(console.error);
-
-    setVideoClient(vClient);
-    setCall(vCall);
-
-    // === CHAT CLIENT ===
-    const cClient = StreamChat.getInstance(API_KEY);
-    cClient
-      .connectUser(
-        {
-          id: tokenData.userId,
-          name: tokenData.userName,
-          image: tokenData.userImage,
-        },
-        tokenData.token
-      )
-      .then(() => {
-        setChatClient(cClient);
-      });
-
-    // Cleanup
-    return () => {
-      vCall?.leave();
-      vClient?.disconnectUser();
-      cClient?.disconnectUser();
+    const fetchSession = async () => {
+      try {
+        const sessionData = await getSessionById(sessionId);
+        setCurrentSession(sessionData);
+      } catch (error) {
+        showNotification('error', 'Failed to load session');
+        navigate(ROUTES.DASHBOARD);
+      }
     };
-  }, [tokenData, callId]);
 
+    fetchSession();
+
+    return () => {
+      clearCurrentSession();
+    };
+  }, [sessionId]);
+
+  // Initialize Stream Video Client and Call
+  useEffect(() => {
+    if (!streamToken || !user || !sessionId) return;
+
+    const initializeStream = async () => {
+      try {
+        setIsInitializing(true);
+
+        // Create Stream Video Client
+        const videoClient = new StreamVideoClient({
+          apiKey: STREAM_API_KEY,
+          user: {
+            id: streamToken.userId,
+            name: streamToken.userName,
+            image: streamToken.userImage,
+          },
+          token: streamToken.token,
+        });
+
+        setClient(videoClient);
+
+        // Create or join call
+        const videoCall = videoClient.call('default', sessionId);
+        
+        await videoCall.join({ create: true });
+        
+        setCall(videoCall);
+      } catch (error) {
+        console.error('Failed to initialize Stream:', error);
+        showNotification('error', 'Failed to join video session');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeStream();
+
+    // Cleanup on unmount
+    return () => {
+      if (call) {
+        call.leave().catch(console.error);
+      }
+      if (client) {
+        client.disconnectUser().catch(console.error);
+      }
+    };
+  }, [streamToken, user, sessionId]);
+
+  // Handle ending session
   const handleEndSession = async () => {
+    if (!currentSession) return;
+
+    // Check if user is the host
+    const isHost = currentSession.host?.clerkId === user?.id;
+    
+    if (!isHost) {
+      showNotification('error', 'Only the host can end this session');
+      return;
+    }
+
     try {
-      await api.post(`/sessions/${callId}/end`);
-      navigate("/dashboard");
-    } catch (err) {
-      alert("Failed to end session");
+      setIsEndingSession(true);
+      
+      await endSession(sessionId);
+      
+      showNotification('success', 'Session ended successfully');
+      
+      // Leave call
+      if (call) {
+        await call.leave();
+      }
+      
+      navigate(ROUTES.DASHBOARD);
+    } catch (error) {
+      showNotification('error', 'Failed to end session');
+    } finally {
+      setIsEndingSession(false);
     }
   };
 
-  if (tokenLoading)
-    return (
-      <div className="flex min-h-screen items-center justify-center text-xl">
-        Loading room...
-      </div>
-    );
-  if (!tokenData)
-    return (
-      <div className="text-red-600 text-center py-20">
-        Failed to authenticate with Stream
-      </div>
-    );
-  if (!videoClient || !chatClient || !call)
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        Connecting...
-      </div>
-    );
+  const handleLeaveSession = async () => {
+    try {
+      if (call) {
+        await call.leave();
+      }
+      navigate(ROUTES.DASHBOARD);
+    } catch (error) {
+      console.error('Failed to leave session:', error);
+      navigate(ROUTES.DASHBOARD);
+    }
+  };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
-      {/* VIDEO SECTION */}
-      <div className="flex-1">
-        <StreamVideo client={videoClient}>
-          <StreamCall call={call}>
-            <StreamTheme className="p-4">
-              <SpeakerLayout participantsBarPosition="bottom" />
-              <div className="mt-6 flex justify-center gap-4">
-                <CallControls />
-              </div>
-            </StreamTheme>
-          </StreamCall>
-        </StreamVideo>
-
-        <div className="p-6 text-center">
-          <button
-            onClick={handleEndSession}
-            className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition shadow-lg"
-          >
-            End Session (Host Only)
-          </button>
+  // Loading states
+  if (isLoadingToken || isInitializing || !currentSession) {
+    return (
+      <div className="flex min-h-screen flex-col bg-slate-900">
+        <TopNav />
+        <div className="flex flex-1 items-center justify-center">
+          <Loader size="xl" message="Joining session..." />
         </div>
       </div>
+    );
+  }
 
-      {/* CHAT SECTION */}
-      <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-gray-300 bg-white flex flex-col h-screen lg:h-auto">
-        <Chat client={chatClient} theme="messaging light">
-          <Channel
-            channel={chatClient.channel("messaging", callId, {
-              name: "Interview Chat",
-            })}
-          >
-            <Window>
-              <ChannelHeader title="Session Chat" />
-              <MessageList />
-              <MessageInput placeholder="Type a message..." />
-            </Window>
-            <Thread />
-          </Channel>
-        </Chat>
+  // Error state - no client or call
+  if (!client || !call) {
+    return (
+      <div className="flex min-h-screen flex-col bg-slate-900">
+        <TopNav />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <p className="text-lg text-slate-300">Failed to join video session</p>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate(ROUTES.DASHBOARD)}
+              className="mt-4"
+            >
+              Return to Dashboard
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
+    );
+  }
+
+  const isHost = currentSession.host?.clerkId === user?.id;
+
+  return (
+    <StreamVideo client={client}>
+      <StreamCall call={call}>
+        <div className="flex min-h-screen flex-col bg-slate-900">
+          {/* Header */}
+          <div className="border-b border-slate-700 bg-slate-800 px-4 py-3">
+            <div className="mx-auto flex max-w-7xl items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLeaveSession}
+                >
+                  <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                  Leave
+                </Button>
+                <div>
+                  <h1 className="text-lg font-semibold text-slate-100">
+                    {currentSession.problem}
+                  </h1>
+                  <p className="text-sm text-slate-400">
+                    {currentSession.difficulty} • {currentSession.participants?.length || 0} / 2 participants
+                  </p>
+                </div>
+              </div>
+              {isHost && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleEndSession}
+                  loading={isEndingSession}
+                >
+                  End Session
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Video Layout */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Main Video Area */}
+            <div className="flex-1 p-4">
+              <SpeakerLayout />
+            </div>
+
+            {/* Sidebar - Participants */}
+            <div className="w-80 border-l border-slate-700 bg-slate-800 p-4">
+              <h3 className="mb-4 text-sm font-semibold uppercase text-slate-400">
+                Participants
+              </h3>
+              <CallParticipantsList onClose={() => {}} />
+            </div>
+          </div>
+
+          {/* Call Controls */}
+          <div className="border-t border-slate-700 bg-slate-800 py-4">
+            <CallControls />
+          </div>
+        </div>
+      </StreamCall>
+    </StreamVideo>
   );
-}
+};
+
+export default SessionRoom;

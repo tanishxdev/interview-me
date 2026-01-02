@@ -1,70 +1,81 @@
+/**
+ * AppRoutes Component
+ * Main routing configuration
+ */
+
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
+import { SignIn, SignUp } from "@clerk/clerk-react";
+import ProtectedRoute from "./ProtectedRoute";
+import { ROUTES } from "../utils/constants";
 
-import Dashboard from "../pages/Dashboard.jsx";
-import Sessions from "../pages/Sessions.jsx";
-import Profile from "../pages/Profile.jsx";
-import SessionRoom from "../pages/SessionRoom/index.jsx";
+// Lazy load pages for better performance
+import Landing from "../pages/Landing";
+import Dashboard from "../pages/Dashboard";
+import Sessions from "../pages/Sessions";
+import SessionRoom from "../pages/SessionRoom";
+import Profile from "../pages/Profile";
 
-function ProtectedRoute({ children }) {
-  const { isLoaded, isSignedIn } = useAuth();
-
-  if (!isLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
-}
-
-function NotFound() {
-  return (
-    <div className="max-w-7xl mx-auto px-6 py-20 text-center">
-      <h1 className="text-6xl font-bold text-gray-900">404</h1>
-      <p className="mt-4 text-2xl text-gray-600">Page not found</p>
-      <a
-        href="/dashboard"
-        className="mt-8 inline-block px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl transition text-lg shadow-lg"
-      >
-        ← Back to Dashboard
-      </a>
-    </div>
-  );
-}
-
-export default function AppRoutes() {
+const AppRoutes = () => {
   return (
     <Routes>
-      {/* Redirect root to dashboard when signed in */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Public Routes */}
+      <Route path={ROUTES.HOME} element={<Landing />} />
 
+      {/* Auth Routes */}
       <Route
-        path="/dashboard"
+        path={ROUTES.SIGN_IN}
+        element={
+          <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <SignIn
+              routing="path"
+              path={ROUTES.SIGN_IN}
+              signUpUrl={ROUTES.SIGN_UP}
+              afterSignInUrl={ROUTES.DASHBOARD}
+            />
+          </div>
+        }
+      />
+      <Route
+        path={ROUTES.SIGN_UP}
+        element={
+          <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <SignUp
+              routing="path"
+              path={ROUTES.SIGN_UP}
+              signInUrl={ROUTES.SIGN_IN}
+              afterSignUpUrl={ROUTES.DASHBOARD}
+            />
+          </div>
+        }
+      />
+
+      {/* Protected Routes */}
+      <Route
+        path={ROUTES.DASHBOARD}
         element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
         }
       />
-
       <Route
-        path="/sessions"
+        path={ROUTES.SESSIONS}
         element={
           <ProtectedRoute>
             <Sessions />
           </ProtectedRoute>
         }
       />
-
       <Route
-        path="/profile"
+        path={ROUTES.SESSION_ROOM}
+        element={
+          <ProtectedRoute>
+            <SessionRoom />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.PROFILE}
         element={
           <ProtectedRoute>
             <Profile />
@@ -72,17 +83,10 @@ export default function AppRoutes() {
         }
       />
 
-      <Route
-        path="/session/:id"
-        element={
-          <ProtectedRoute>
-            <SessionRoom />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* Catch-all route */}
-      <Route path="*" element={<NotFound />} />
+      {/* Fallback - Redirect to home */}
+      <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );
-}
+};
+
+export default AppRoutes;
